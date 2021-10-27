@@ -14,60 +14,69 @@ from spyne import ServiceBase
 
 # The names of the needed types for implementing this service should be self-explanatory.
 
-from spyne import Iterable, Integer, Unicode
-
-
+from spyne import Iterable, Integer, Unicode, Integer32, TTableModel, UnsignedInteger32, Mandatory
+from spyne.error import ResourceNotFoundError
 from spyne.protocol.soap import Soap11
 
 # Our server is going to use HTTP as transport, It’s going to wrap the Application instance.
 
 from spyne.server.wsgi import WsgiApplication
 
-# databases
+# database sqlalchemy
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import MetaData
 
-from pony.orm import *
+# Initialize SQLAlchemy Environment
+db = create_engine('sqlite:///moviles.db')
+Session = sessionmaker(bind=db)
+session = Session()
 
-db = Database()
-set_sql_debug(True)
+TableModel = TTableModel()
+TableModel.Attributes.sqla_metadata.bind = db
 
-# MySQL
-db.bind(provider='mysql', host='localhost', user='root', passwd='wil99', db='tarea')
+class Moviles(TableModel):
+    __tablename__ = 'moviles'
 
-class Person(db.Entity):
-    name = Required(str)
-    age = Required(int)
-    cars = Set('Car')
+    id = Integer32(primary_key=True, nullable=False)
+    marca = Unicode(50)
+    linea = Unicode(50)
+    modelo = Unicode(50)
+    color = Unicode(70)
+    ram = Integer32()
 
-class Car(db.Entity):
-    make = Required(str)
-    model = Required(str)
-    owner = Required(Person)
-
-db.generate_mapping(create_tables=True)
-
-with db_session:
-    p1 = Person[1]
-    print(p1.age)
+TableModel.Attributes.sqla_metadata.create_all(checkfirst=True)
 
 
 # step1: Defining a Spyne Service
 
-class HelloWorldService(ServiceBase):
+class MovilesServiceCRUD(ServiceBase):
 
-    @rpc(Unicode, Integer, _returns=Iterable(Unicode))
-    def say_hello(self, name, times):
+    @rpc(Moviles, _returns=UnsignedInteger32)
+    def create(ctx, movile):
+        print(movile)
+        new_movile = Moviles(marca = movile.marca, linea = movile.linea, modelo = movile.modelo, color = movile.color, ram = movile.ram)
+        session.add(new_movile)
+        session.commit()
 
-        for i in range(times):
+        return 1
 
-            yield u'Hello, %s' % name
+    @rpc(Mandatory(UnsignedInteger32))
+    def delete(ctx, movil_id):
+        count = session.query(Moviles).filter_by(id=movil_id).count()
+        if count == 0:
+            raise ResourceNotFoundError(movil_id)
 
-    @rpc(Integer(nillable=False), Integer(nillable=False), _returns=Integer)
-    def sum(ctx, a, b):
-        return int(a + b)
+        session.query(Moviles).filter_by(id=movil_id).delete()
+        session.commit()
+
+    @rpc(_returns=Iterable(Moviles))
+    def get_all(ctx):
+        return session.query(Moviles)
 
 
 # step2: Glue the service definition, input and output protocols
-soap_app = Application([HelloWorldService], 'spyne.examples.hello.soap',
+soap_app = Application([MovilesServiceCRUD], 'spyne.examples.sql_crud',
 
                        in_protocol=Soap11(validator='lxml'),
 
@@ -90,6 +99,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     logging.getLogger('spyne.protocol.xml').setLevel(logging.DEBUG)
+    logging.getLogger('sqlalchemy.engine.base.Engine').setLevel(logging.DEBUG)
 
     logging.info("listening to http://127.0.0.1:8000")
 

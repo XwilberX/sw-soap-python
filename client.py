@@ -18,7 +18,15 @@ def say_hello_test(url, name, times):
 
     client = Client(url)                    # Crear un objeto de interfaz de servicio web
 
-    res = client.service.sum(2, 3)   # Llame al método getMobileCodeInfo en esta interfaz y pase los parámetros
+    dat = {
+        'marca': 'hola',
+        'linea': 'hola2',
+        'modelo': 'hola3',
+        'color': 'azul',
+        'ram': 4
+    }
+
+    res = client.service.create(dat)   # Llame al método getMobileCodeInfo en esta interfaz y pase los parámetros
 
    
 
